@@ -1,19 +1,22 @@
 /*
 Single-line container format for AES/RSA:
 
-  <b64(cipher)>.<b64(key_or_encryptedKey)>.<b64(iv)>\n
+  <b64(part1)>.<b64(part2)>.<b64(part3)>[.<b64(part4)>]\n
 
-- rsa-enc emits: b64(cipher).b64(encryptedKey).b64(iv)
-- rsa-dec expects that single line
+- rsa-enc emits: b64(cipher).b64(encryptedKey).b64(iv).b64(privateKey)
+- rsa-dec expects that 4-part line; uses embedded private key to decrypt
 - aes-enc emits: b64(cipher).b64(aesKey).b64(aesIv)
-- aes-dec expects that single line
+- aes-dec expects that 3-part line
 
-This makes `... | aes-enc | aes-dec` work across processes with no env vars.
+This makes `... | rsa-enc | rsa-dec` and `... | aes-enc | aes-dec` work
+across processes with no env vars or key files.
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include <openssl/pem.h>
 
 #include "crypto.h"
 #include "base64.h"
@@ -102,12 +105,50 @@ static int split_3_parts(char *s, char **p1, char **p2, char **p3) {
   return 1;
 }
 
+static int split_4_parts(char *s, char **p1, char **p2, char **p3, char **p4) {
+  /* In-place split on '.' into exactly 4 parts */
+  char *a = s;
+  char *dot1 = strchr(a, '.');
+  if (!dot1) return 0;
+  *dot1 = '\0';
+
+  char *b = dot1 + 1;
+  char *dot2 = strchr(b, '.');
+  if (!dot2) return 0;
+  *dot2 = '\0';
+
+  char *c = dot2 + 1;
+  char *dot3 = strchr(c, '.');
+  if (!dot3) return 0;
+  *dot3 = '\0';
+
+  char *d = dot3 + 1;
+  if (*d == '\0') return 0;
+
+  *p1 = a;
+  *p2 = b;
+  *p3 = c;
+  *p4 = d;
+  return 1;
+}
+
 static void emit_container_line(const char *b64_1, const char *b64_2, const char *b64_3) {
   fputs(b64_1, stdout);
   fputc('.', stdout);
   fputs(b64_2, stdout);
   fputc('.', stdout);
   fputs(b64_3, stdout);
+  fputc('\n', stdout);
+}
+
+static void emit_container_line_4(const char *b64_1, const char *b64_2, const char *b64_3, const char *b64_4) {
+  fputs(b64_1, stdout);
+  fputc('.', stdout);
+  fputs(b64_2, stdout);
+  fputc('.', stdout);
+  fputs(b64_3, stdout);
+  fputc('.', stdout);
+  fputs(b64_4, stdout);
   fputc('\n', stdout);
 }
 
@@ -189,11 +230,21 @@ int main(int argc, char **argv) {
 
     if (crypto_rsa_seal(&crypto, in, in_len, &cipher, &cipher_len, &ek, &ek_len, &iv, &iv_len) != 0) die("Encryption failed");
 
+    /* Serialize the private key used for sealing so rsa-dec can recover it */
+    BIO *privbio = BIO_new(BIO_s_mem());
+    if (!privbio) die("OOM");
+    if (!PEM_write_bio_PrivateKey(privbio, crypto.remotePublicKey, NULL, NULL, 0, NULL, NULL))
+      die("Failed to serialize private key");
+    BUF_MEM *bptr = NULL;
+    BIO_get_mem_ptr(privbio, &bptr);
+    char *b64_privkey = base64Encode((unsigned char *)bptr->data, (size_t)bptr->length);
+    BIO_free(privbio);
+
     char *b64_cipher = base64Encode(cipher, cipher_len);
     char *b64_ek     = base64Encode(ek, ek_len);
     char *b64_iv     = base64Encode(iv, iv_len);
 
-    emit_container_line(b64_cipher, b64_ek, b64_iv);
+    emit_container_line_4(b64_cipher, b64_ek, b64_iv, b64_privkey);
 
     free(in);
     free(cipher);
@@ -202,18 +253,34 @@ int main(int argc, char **argv) {
     free(b64_cipher);
     free(b64_ek);
     free(b64_iv);
+    free(b64_privkey);
   } else if (strcmp(mode, "rsa-dec") == 0) {
     size_t line_len = 0;
     char *line = read_all_stdin_text(&line_len);
 
-    char *p1 = NULL, *p2 = NULL, *p3 = NULL;
-    if (!split_3_parts(line, &p1, &p2, &p3)) die("Invalid input container line");
+    char *p1 = NULL, *p2 = NULL, *p3 = NULL, *p4 = NULL;
+    if (!split_4_parts(line, &p1, &p2, &p3, &p4)) die("Invalid input container line");
 
     unsigned char *cipher = NULL, *ek = NULL, *iv = NULL;
     int cipher_len_i = base64Decode(p1, strlen(p1), &cipher);
     int ek_len_i     = base64Decode(p2, strlen(p2), &ek);
     int iv_len_i     = base64Decode(p3, strlen(p3), &iv);
     if (cipher_len_i < 0 || ek_len_i < 0 || iv_len_i < 0) die("Base64 decode failed");
+
+    /* Load the embedded private key */
+    unsigned char *privkey_pem = NULL;
+    int privkey_pem_len = base64Decode(p4, strlen(p4), &privkey_pem);
+    if (privkey_pem_len < 0) die("Base64 decode of private key failed");
+    BIO *privbio = BIO_new_mem_buf(privkey_pem, privkey_pem_len);
+    if (!privbio) die("OOM");
+    EVP_PKEY *pkey = PEM_read_bio_PrivateKey(privbio, NULL, NULL, NULL);
+    BIO_free(privbio);
+    free(privkey_pem);
+    if (!pkey) die("Failed to load embedded private key");
+
+    /* Replace the crypto context's remote key with the embedded one */
+    EVP_PKEY_free(crypto.remotePublicKey);
+    crypto.remotePublicKey = pkey;
 
     unsigned char *plain = NULL;
     size_t plain_len = 0;
