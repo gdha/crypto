@@ -1,0 +1,16 @@
+Source: crypto
+Section: utils
+Priority: optional
+Maintainer: Your Name <you@example.com>
+Build-Depends: debhelper-compat (= 13), build-essential, libssl-dev, ruby-ronn
+Standards-Version: 4.6.2
+Homepage: https://github.com/shanet/Crypto-Example
+Rules-Requires-Root: no
+
+Package: crypto
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: OpenSSL-based stdin/stdout crypto program (RSA seal/open and AES-256-CBC)
+ A small CLI tool demonstrating OpenSSL EVP APIs:
+ - rsa-enc / rsa-dec: hybrid RSA+AES sealing
+ - aes-enc / aes-dec: AES-256-CBC with embedded key+iv container

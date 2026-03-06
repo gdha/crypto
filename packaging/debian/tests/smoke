@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+# AES round-trip
+printf "test" | crypto aes-enc | crypto aes-dec | grep -qx "test"
+
+# RSA round-trip (will output exactly the original bytes)
+printf "hello" | crypto rsa-enc | crypto rsa-dec | grep -qx "hello"

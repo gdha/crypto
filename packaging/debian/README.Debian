@@ -1,0 +1,10 @@
+crypto for Debian
+=================
+
+This package installs the `crypto` CLI tool and its man page.
+
+Modes:
+  crypto rsa-enc | rsa-dec | aes-enc | aes-dec
+
+The AES mode embeds the AES key and IV in the output container. This is intended
+for demonstration/testing only and is not secure for real-world use.

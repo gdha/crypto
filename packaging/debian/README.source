@@ -1,0 +1,6 @@
+To build the Debian package:
+
+  sudo apt-get install build-essential debhelper libssl-dev ruby-ronn
+  dpkg-buildpackage -us -uc
+
+The build runs `make all` and then `make install` into the package staging area.
