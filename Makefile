@@ -93,3 +93,7 @@ deb: dist
 
 clean:
 	rm -f $(BIN) $(OBJS) $(MAN_ROFF)
+
+test:
+	@echo -e "\033[1m== Testing crypto ==\033[0;0m"
+	echo -n test | ./crypto aes-enc | ./crypto
