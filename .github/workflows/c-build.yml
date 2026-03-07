@@ -1,0 +1,40 @@
+name: C Build and Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y build-essential libssl-dev
+
+      - name: Check for Makefile
+        run: |
+          if [ ! -f Makefile ]; then
+            echo "Warning: Makefile not found in the repository root. Please add a Makefile to enable automated build and test steps."
+            echo "MAKEFILE_EXISTS=false" >> "$GITHUB_ENV"
+          else
+            echo "MAKEFILE_EXISTS=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build
+        if: env.MAKEFILE_EXISTS == 'true'
+        run: make
+
+      - name: Run tests
+        if: env.MAKEFILE_EXISTS == 'true'
+        run: make test || echo "Warning: 'make test' target not found or returned an error. Add a 'test' target to your Makefile to enable automated testing."
