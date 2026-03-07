@@ -94,6 +94,6 @@ deb: dist
 clean:
 	rm -f $(BIN) $(OBJS) $(MAN_ROFF)
 
-test:
+test: $(BIN)
 	@echo -e "\033[1m== Testing crypto ==\033[0;0m"
-	echo -n test | ./crypto aes-enc | ./crypto
+	echo -n test | ./$(BIN) aes-enc | ./$(BIN)
