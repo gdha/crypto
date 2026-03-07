@@ -96,4 +96,4 @@ clean:
 
 test: $(BIN)
 	@echo -e "\033[1m== Testing crypto ==\033[0;0m"
-	echo -n test | ./$(BIN) aes-enc | ./$(BIN)
+	echo -n test | ./$(BIN) aes-enc | ./$(BIN) aes-dec
