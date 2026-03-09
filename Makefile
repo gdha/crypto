@@ -69,19 +69,19 @@ install: $(BIN) man
 dist: clean dist/$(name)-$(distversion).tar.gz
 
 dist/$(name)-$(distversion).tar.gz:
-	@echo -e "\033[1m== Building archive $(name)-$(distversion) ==\033[0;0m"
+	@echo "\033[1m== Building archive $(name)-$(distversion) ==\033[0;0m"
 	tar -czf dist/$(name)-$(distversion).tar.gz --transform='s,^,$(name)-$(version)/,S' \
 	Makefile packaging LICENSE $(name).c $(name).1.md
 
 rpm: dist
-	@echo -e "\033[1m== Building RPM package $(name)-$(distversion)==\033[0;0m"
+	@echo "\033[1m== Building RPM package $(name)-$(distversion)==\033[0;0m"
 	rpmbuild -ta --clean \
 		--define "_rpmfilename dist/%%{NAME}-%%{VERSION}-%%{RELEASE}.%%{ARCH}.rpm" \
 		--define "debug_package %{nil}" \
 		--define "_rpmdir %(pwd)" dist/$(name)-$(distversion).tar.gz
 
 deb: dist
-	@echo -e "\033[1m== Building DEB package $(name)-$(distversion)==\033[0;0m"
+	@echo "\033[1m== Building DEB package $(name)-$(distversion)==\033[0;0m"
 	cp -r packaging/debian/ .
 	chmod 755 debian/rules
 	fakeroot debian/rules clean
@@ -95,5 +95,6 @@ clean:
 	rm -f $(BIN) $(OBJS) $(MAN_ROFF)
 
 test: $(BIN)
-	@echo -e "\033[1m== Testing crypto ==\033[0;0m"
-	echo -n test | ./$(BIN) aes-enc | ./$(BIN) aes-dec
+	@echo "\033[1m== Testing crypto ==\033[0;0m"
+	printf "test" | ./$(BIN) aes-enc | ./$(BIN) aes-dec
+	@echo
