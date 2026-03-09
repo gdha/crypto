@@ -2,9 +2,9 @@ Source: crypto
 Section: utils
 Priority: optional
 Maintainer: Your Name <you@example.com>
-Build-Depends: debhelper-compat (= 13), build-essential, libssl-dev, ruby-ronn
+Build-Depends: debhelper-compat (= 13), build-essential, libssl-dev, ruby-ronn, ronn
 Standards-Version: 4.6.2
-Homepage: https://github.com/shanet/Crypto-Example
+Homepage: https://github.com/gdha/crypto
 Rules-Requires-Root: no
 
 Package: crypto

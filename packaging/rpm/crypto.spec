@@ -4,7 +4,7 @@ Release:        1%{?dist}
 Summary:        OpenSSL-based stdin/stdout crypto program (RSA seal/open and AES-256-CBC)
 
 License:        GPLv3
-URL:            https://github.com/shanet/Crypto-Example
+URL:            https://github.com/gdha/crypto
 # If you create a tarball, set Source0 to it, e.g.:
 # Source0:        %{name}-%{version}.tar.gz
 Source0:        %{name}-%{version}.tar.gz
@@ -13,7 +13,7 @@ BuildRequires:  gcc
 BuildRequires:  make
 BuildRequires:  openssl-devel
 # Manpage generator
-BuildRequires:  rubygem-ronn
+BuildRequires:  rubygem-ronn-ng
 
 # If you install the built binary and man page, RPM will auto-detect runtime deps
 Requires:       openssl-libs
