@@ -38,3 +38,24 @@ jobs:
       - name: Run tests
         if: env.MAKEFILE_EXISTS == 'true'
         run: make test
+
+      - name: Build static binary
+        if: env.MAKEFILE_EXISTS == 'true'
+        run: make static
+
+      - name: Verify static binary
+        if: env.MAKEFILE_EXISTS == 'true'
+        run: |
+          file crypto
+          if ldd crypto 2>&1 | grep -q "not a dynamic executable"; then
+            echo "PASS: Binary is statically linked"
+          else
+            echo "FAIL: Binary is NOT statically linked"
+            exit 1
+          fi
+          if file crypto | grep -q "stripped"; then
+            echo "PASS: Binary is stripped"
+          else
+            echo "FAIL: Binary is NOT stripped"
+            exit 1
+          fi

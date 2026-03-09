@@ -10,6 +10,7 @@
 # Targets:
 #   make            -> build binary + man page (requires ronn)
 #   make man        -> build man page only
+#   make static     -> build static, stripped binary
 #   make install    -> install binary and man page (DESTDIR/PREFIX supported)
 #   make clean
 
@@ -40,7 +41,7 @@ OBJS := $(SRCS:.c=.o)
 MAN_MD := crypto.1.md
 MAN_ROFF := crypto.1
 
-.PHONY: all man install clean
+.PHONY: all man install clean static
 
 all: $(BIN) man
 
@@ -90,6 +91,9 @@ deb: dist
 	fakeroot dh_builddeb --destdir=dist
 	-rm -rf debian/
 
+
+static: $(OBJS)
+	$(CC) $(LDFLAGS) -static -Wl,-s -o $(BIN) $(OBJS) $(LDLIBS)
 
 clean:
 	rm -f $(BIN) $(OBJS) $(MAN_ROFF)
