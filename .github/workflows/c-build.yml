@@ -20,7 +20,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential libssl-dev ruby-ronn
+        run: sudo apt-get update && sudo apt-get install -y build-essential libssl-dev groff ruby ruby-dev && sudo gem install ronn --no-document
 
       - name: Check for Makefile
         run: |
