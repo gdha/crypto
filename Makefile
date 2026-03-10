@@ -93,7 +93,7 @@ deb: dist
 
 
 static: $(OBJS)
-	$(CC) $(LDFLAGS) -static -Wl,-s -o $(BIN) $(OBJS) $(LDLIBS)
+	$(CC) $(LDFLAGS) -Wl,-s -o $(BIN) $(OBJS) -Wl,-Bstatic $(LDLIBS) -Wl,-Bdynamic -ldl
 
 clean:
 	rm -f $(BIN) $(OBJS) $(MAN_ROFF)
