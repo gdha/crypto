@@ -3,9 +3,10 @@ gcc -std=c11 -Wall -Wextra -O2 \
   -o crypto \
   -lssl -lcrypto
 
-# To build a static and stripped binary:
+# To build a static and stripped binary (OpenSSL statically linked,
+# glibc dynamically linked to avoid linker warnings about dlopen/getaddrinfo):
 # gcc -std=c11 -Wall -Wextra -O2 \
 #   crypto.c crypto-func.c base64.c \
-#   -static -Wl,-s \
+#   -Wl,-s \
 #   -o crypto \
-#   -lssl -lcrypto
+#   -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -ldl
