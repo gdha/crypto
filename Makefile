@@ -72,7 +72,7 @@ dist: clean dist/$(name)-$(distversion).tar.gz
 dist/$(name)-$(distversion).tar.gz:
 	@echo "\033[1m== Building archive $(name)-$(distversion) ==\033[0;0m"
 	tar -czf dist/$(name)-$(distversion).tar.gz --transform='s,^,$(name)-$(version)/,S' \
-	Makefile packaging LICENSE $(name).c $(name).1.md
+	Makefile packaging LICENSE *.c *.h README.md $(name).1.md
 
 rpm: dist
 	@echo "\033[1m== Building RPM package $(name)-$(distversion)==\033[0;0m"

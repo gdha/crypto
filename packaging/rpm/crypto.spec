@@ -45,8 +45,8 @@ printf "test" | %{buildroot}%{_bindir}/crypto aes-enc | %{buildroot}%{_bindir}/c
 printf "hello" | %{buildroot}%{_bindir}/crypto rsa-enc | %{buildroot}%{_bindir}/crypto rsa-dec | grep -qx "hello"
 
 %files
-%license LICENSE* COPYING* 2>/dev/null || :
-%doc README* 2>/dev/null || :
+%license LICENSE
+%doc README.md
 %{_bindir}/crypto
 %{_mandir}/man1/crypto.1*
 
