@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+# Debhelper rules file
+# Uses the project's Makefile to build and install.
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	dh_auto_build -- all
+
+override_dh_auto_install:
+	# Use DESTDIR+PREFIX expected by our Makefile
+	$(MAKE) DESTDIR=$(CURDIR)/debian/crypto PREFIX=/usr install
