@@ -28,7 +28,7 @@ CC ?= gcc
 CFLAGS ?= -std=c11 -Wall -Wextra -O2
 CPPFLAGS ?=
 LDFLAGS ?=
-LDLIBS ?= -lssl -lcrypto
+LDLIBS ?= -lssl -lcrypto -lm
 
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
