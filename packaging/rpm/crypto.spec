@@ -1,5 +1,5 @@
 Name:           crypto
-Version:        1.0.0
+Version:        2.0.0
 Release:        1%{?dist}
 Summary:        OpenSSL-based stdin/stdout crypto program (RSA seal/open and AES-256-CBC)
 
