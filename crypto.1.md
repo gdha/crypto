@@ -33,17 +33,17 @@ The recipient's **public key** PEM file is required. The corresponding private k
 
 Reads a single-line RSA container from `stdin`, decrypts it using the given **private key** PEM file, and writes plaintext bytes to `stdout`.
 
-### aes-keygen \<keyfile\>
+### aes-keygen keyfile
 
 Generates 48 cryptographically random bytes (32-byte AES-256 key + 16-byte IV) and writes them to `keyfile`. Use this to create a key file before running `aes-enc` or `aes-dec`. Prints a confirmation message to `stderr`.
 
-### aes-enc \<keyfile\>
+### aes-enc keyfile
 
 Reads plaintext bytes from `stdin`, encrypts using AES-256-CBC with the key and IV loaded from `keyfile`, and writes a single-line container to `stdout`.
 
 The key is **not** included in the container output. Both the sender and receiver must possess the same key file.
 
-### aes-dec \<keyfile\>
+### aes-dec keyfile
 
 Reads a single-line AES container from `stdin`, loads the key from `keyfile`, and writes plaintext bytes to `stdout`.
 

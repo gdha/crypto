@@ -30,13 +30,13 @@ Reads plaintext bytes from \fBstdin\fR, encrypts using RSA hybrid "seal" (RSA\-e
 The recipient's \fBpublic key\fR PEM file is required\. The corresponding private key never leaves the recipient's side and is never transmitted\.
 .SS "rsa\-dec <privkey\.pem>"
 Reads a single\-line RSA container from \fBstdin\fR, decrypts it using the given \fBprivate key\fR PEM file, and writes plaintext bytes to \fBstdout\fR\.
-.SS "aes\-keygen <var>keyfile</var>"
+.SS "aes\-keygen keyfile"
 Generates 48 cryptographically random bytes (32\-byte AES\-256 key + 16\-byte IV) and writes them to \fBkeyfile\fR\. Use this to create a key file before running \fBaes\-enc\fR or \fBaes\-dec\fR\. Prints a confirmation message to \fBstderr\fR\.
-.SS "aes\-enc <var>keyfile</var>"
+.SS "aes\-enc keyfile"
 Reads plaintext bytes from \fBstdin\fR, encrypts using AES\-256\-CBC with the key and IV loaded from \fBkeyfile\fR, and writes a single\-line container to \fBstdout\fR\.
 .P
 The key is \fBnot\fR included in the container output\. Both the sender and receiver must possess the same key file\.
-.SS "aes\-dec <var>keyfile</var>"
+.SS "aes\-dec keyfile"
 Reads a single\-line AES container from \fBstdin\fR, loads the key from \fBkeyfile\fR, and writes plaintext bytes to \fBstdout\fR\.
 .SH "KEY FILE FORMAT"
 .SS "RSA keys"
