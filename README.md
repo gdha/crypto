@@ -4,10 +4,15 @@
 
 A small CLI tool that demonstrates OpenSSL EVP APIs for encryption and decryption. It reads data from standard input and writes the result to standard output, making it suitable for shell pipelines and scripting.
 
+Keys are **never embedded in the output container** — every mode requires a key file argument.
+
 ## Features
 
-- **RSA hybrid encryption** via OpenSSL `EVP_Seal*` / `EVP_Open*` (`rsa-enc` / `rsa-dec`)
-- **AES-256-CBC** symmetric encryption via OpenSSL `EVP_Encrypt*` / `EVP_Decrypt*` (`aes-enc` / `aes-dec`) — **Note:** the AES container embeds the key and IV, so it is for demonstration purposes only
+- **RSA hybrid encryption** via OpenSSL `EVP_Seal*` / `EVP_Open*` (`rsa-enc` / `rsa-dec`) — uses a PEM public key to encrypt, PEM private key to decrypt
+- **AES-256-CBC** symmetric encryption via OpenSSL `EVP_Encrypt*` / `EVP_Decrypt*` (`aes-enc` / `aes-dec`) — uses a binary key file; key is never included in the output
+- `aes-keygen` subcommand to generate a secure random AES key file
+- Input capped at 256 MiB to prevent unbounded memory growth
+- Key material wiped from memory with `OPENSSL_cleanse` after use
 - Designed for piping: no interactive prompts, no labels on output
 
 ## Requirements
@@ -28,67 +33,96 @@ This compiles the `crypto` binary and generates the man page.
 ## Usage
 
 ```
-crypto rsa-enc   < plaintext > container.txt
-crypto rsa-dec   < container.txt > plaintext
+crypto rsa-enc <pubkey.pem>   encrypt stdin with RSA public key
+crypto rsa-dec <privkey.pem>  decrypt stdin with RSA private key
 
-crypto aes-enc   < plaintext > container.txt
-crypto aes-dec   < container.txt > plaintext
+crypto aes-keygen <keyfile>   generate a new AES-256 key+iv file
+crypto aes-enc <keyfile>      encrypt stdin with AES key file
+crypto aes-dec <keyfile>      decrypt stdin with AES key file
 ```
 
 ### Modes
 
 | Mode | Description |
 |------|-------------|
-| `rsa-enc` | Encrypt stdin using RSA hybrid seal (RSA-encrypted session key + AES-256-CBC). Writes a single-line container to stdout. |
-| `rsa-dec` | Decrypt a single-line RSA container from stdin. Writes plaintext to stdout. |
-| `aes-enc` | Encrypt stdin using AES-256-CBC with a randomly generated key and IV. Writes a single-line container (including key and IV) to stdout. |
-| `aes-dec` | Decrypt a single-line AES container from stdin (key and IV are embedded). Writes plaintext to stdout. |
+| `rsa-enc <pubkey.pem>` | Encrypt stdin using RSA hybrid seal. The recipient's public key PEM is required. Writes a single-line container to stdout. |
+| `rsa-dec <privkey.pem>` | Decrypt a single-line RSA container from stdin using the private key PEM. |
+| `aes-keygen <keyfile>` | Generate 48 random bytes (32-byte key + 16-byte IV) and write to `keyfile`. |
+| `aes-enc <keyfile>` | Encrypt stdin using AES-256-CBC. Key loaded from `keyfile`; key is **not** in the output. |
+| `aes-dec <keyfile>` | Decrypt a single-line AES container from stdin. Key loaded from `keyfile`. |
+
+## Key Setup
+
+### RSA
+
+Generate a key pair with OpenSSL:
+
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+openssl pkey -in private.pem -pubout -out public.pem
+```
+
+Keep `private.pem` secret. Share `public.pem` with anyone who needs to encrypt data for you.
+
+### AES
+
+Generate a key file:
+
+```bash
+./crypto aes-keygen my.key
+```
+
+This writes 48 random bytes to `my.key` (32-byte AES-256 key + 16-byte IV). Keep this file secret and share it out-of-band with anyone who needs to decrypt.
 
 ## Examples
 
 ```bash
-# AES round-trip
-printf "test" | ./crypto aes-enc | ./crypto aes-dec
-
 # RSA round-trip
-printf "hello\n" | ./crypto rsa-enc | ./crypto rsa-dec
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+openssl pkey -in private.pem -pubout -out public.pem
+printf "hello\n" | ./crypto rsa-enc public.pem | ./crypto rsa-dec private.pem
 
-# Save encrypted output to a file
-cat input.bin | ./crypto aes-enc > out.container
-cat out.container | ./crypto aes-dec > input.bin.recovered
+# AES round-trip
+./crypto aes-keygen my.key
+printf "test" | ./crypto aes-enc my.key | ./crypto aes-dec my.key
+
+# Encrypt a file
+./crypto aes-enc my.key < input.bin > out.container
+./crypto aes-dec my.key < out.container > input.bin.recovered
 ```
 
 ## Container Format
 
 All `*-enc` modes output a **single line** with Base64-encoded parts separated by dots.
 
-**AES container:**
-
-```
-b64(ciphertext).b64(key).b64(IV)
-```
-
 **RSA container:**
 
 ```
-b64(ciphertext).b64(encryptedSessionKey).b64(IV).b64(privateKey)
+b64(ciphertext).b64(encryptedSessionKey).b64(IV)
 ```
 
-Each `b64(...)` is Base64-encoded without newlines.
+**AES container:**
+
+```
+b64(ciphertext).b64(IV)
+```
+
+Each `b64(...)` is Base64-encoded without newlines. Neither container includes the key.
 
 ## Exit Status
 
 | Code | Meaning |
 |------|---------|
 | `0` | Success |
-| `1` | Cryptographic or I/O error |
-| `2` | Usage error (wrong arguments) |
+| `1` | Cryptographic, I/O, or key file error |
+| `2` | Usage error (wrong arguments or unknown mode) |
 
-## Notes
+## Security Notes
 
-- The **AES container includes the key and IV** in plaintext (Base64-encoded), so it is suitable only as a format demonstration. Anyone with the container can decrypt it.
-- `aes-dec` and `rsa-dec` expect the full container on stdin (one line).
-- Base64 decoding errors or malformed containers will cause the program to print an error to stderr and exit with a non-zero status.
+- RSA containers contain no key material. Confidentiality depends on keeping `private.pem` secret.
+- AES containers contain only the IV, not the key. The key file must be kept secret and shared securely out-of-band.
+- Input is limited to 256 MiB.
+- Key material is wiped with `OPENSSL_cleanse` before being freed.
 
 ## Testing
 
@@ -96,7 +130,7 @@ Each `b64(...)` is Base64-encoded without newlines.
 make test
 ```
 
-Runs a basic AES round-trip: `printf "test" | ./crypto aes-enc | ./crypto aes-dec`.
+Runs a basic AES and RSA round-trip smoke test.
 
 ## Installation
 

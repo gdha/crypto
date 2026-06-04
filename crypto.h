@@ -6,6 +6,11 @@
 
 #include <openssl/evp.h>
 
+/* Single source of truth for the version string.
+   Update this when cutting a release; the Makefile, RPM spec, and Debian
+   changelog are all derived from this value. */
+#define CRYPTO_VERSION "2.0.0"
+
 #define RSA_KEYLEN 2048
 #define AES_ROUNDS 6
 

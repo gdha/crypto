@@ -2,6 +2,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 #include <openssl/pem.h>
 #include <openssl/aes.h>
@@ -42,21 +43,24 @@ int crypto_init(Crypto *c, int pseudo_client) {
   c->aesEncryptContext = EVP_CIPHER_CTX_new();
   c->rsaDecryptContext = EVP_CIPHER_CTX_new();
   c->aesDecryptContext = EVP_CIPHER_CTX_new();
-  if (!c->rsaEncryptContext || !c->aesEncryptContext || !c->rsaDecryptContext || !c->aesDecryptContext) {
+  if (!c->rsaEncryptContext || !c->aesEncryptContext ||
+      !c->rsaDecryptContext || !c->aesDecryptContext) {
     return FAILURE;
   }
 
-  /* Establish AES key/iv lengths like the original */
-  if (EVP_CipherInit_ex(c->aesEncryptContext, EVP_aes_256_cbc(), NULL, NULL, NULL, 1) != 1) {
+  /* Establish AES key/iv lengths from the cipher */
+  if (EVP_CipherInit_ex(c->aesEncryptContext, EVP_aes_256_cbc(), NULL, NULL, NULL, 1) != 1)
     return FAILURE;
-  }
   c->aesKeyLength = (size_t)EVP_CIPHER_CTX_key_length(c->aesEncryptContext);
   c->aesIvLength  = (size_t)EVP_CIPHER_CTX_iv_length(c->aesEncryptContext);
 
   if (generate_rsa_keypair(&c->localKeypair) != SUCCESS) return FAILURE;
 
   if (c->pseudo_client) {
-    /* original code generates a remote keypair for demo purposes */
+    /* Demo mode: generate a "remote" keypair so enc+dec work in one process.
+       NOTE: remotePublicKey holds a *full keypair* here intentionally for the
+       demo round-trip.  In production the recipient's public key is loaded
+       from a file and the private key never leaves the recipient's side. */
     if (generate_rsa_keypair(&c->remotePublicKey) != SUCCESS) return FAILURE;
   } else {
     c->remotePublicKey = NULL;
@@ -78,6 +82,9 @@ void crypto_cleanup(Crypto *c) {
   EVP_CIPHER_CTX_free(c->rsaDecryptContext);
   EVP_CIPHER_CTX_free(c->aesDecryptContext);
 
+  /* Wipe key material before freeing */
+  if (c->aesKey) OPENSSL_cleanse(c->aesKey, c->aesKeyLength);
+  if (c->aesIv)  OPENSSL_cleanse(c->aesIv,  c->aesIvLength);
   free(c->aesKey);
   free(c->aesIv);
 
@@ -94,13 +101,17 @@ int crypto_rsa_seal(
   size_t out_len = 0;
   int block_len = 0;
 
+  /* Guard against silent truncation when casting to int for OpenSSL APIs. */
+  if (messageLength > (size_t)INT_MAX) return FAILURE;
+
   *encryptedKey = (unsigned char *)malloc((size_t)EVP_PKEY_size(c->remotePublicKey));
-  *iv = (unsigned char *)malloc(EVP_MAX_IV_LENGTH);
+  *iv           = (unsigned char *)malloc(EVP_MAX_IV_LENGTH);
   if (!*encryptedKey || !*iv) return FAILURE;
 
   *ivLength = EVP_MAX_IV_LENGTH;
 
-  *encryptedMessage = (unsigned char *)malloc(messageLength + EVP_MAX_IV_LENGTH);
+  /* Output: at most messageLength + one extra AES block */
+  *encryptedMessage = (unsigned char *)malloc(messageLength + (size_t)EVP_MAX_IV_LENGTH);
   if (!*encryptedMessage) return FAILURE;
 
   if (EVP_SealInit(c->rsaEncryptContext, EVP_aes_256_cbc(),
@@ -133,13 +144,19 @@ int crypto_rsa_open(
   const unsigned char *iv, size_t ivLength,
   unsigned char **decryptedMessage, size_t *decryptedMessageLength
 ) {
-  (void)ivLength; /* OpenSSL uses cipher’s IV length; keep for API symmetry */
+  (void)ivLength; /* OpenSSL uses cipher's IV length; keep for API symmetry */
   size_t out_len = 0;
   int block_len = 0;
+
+  /* Guard against silent truncation when casting to int for OpenSSL APIs. */
+  if (encryptedMessageLength > (size_t)INT_MAX) return FAILURE;
+  if (encryptedKeyLength     > (size_t)INT_MAX) return FAILURE;
 
   *decryptedMessage = (unsigned char *)malloc(encryptedMessageLength + ivLength);
   if (!*decryptedMessage) return FAILURE;
 
+  /* In pseudo_client mode the "remote" field holds a full keypair (demo).
+     In normal mode the local private key is used for opening. */
   EVP_PKEY *key = c->pseudo_client ? c->remotePublicKey : c->localKeypair;
 
   if (EVP_OpenInit(c->rsaDecryptContext, EVP_aes_256_cbc(),
@@ -172,15 +189,21 @@ int crypto_aes_encrypt(
   int block_len = 0;
   int out_len = 0;
 
+  /* Guard against silent truncation when casting to int for OpenSSL APIs. */
+  if (messageLength > (size_t)INT_MAX) return FAILURE;
+
   *encryptedMessage = (unsigned char *)malloc(messageLength + AES_BLOCK_SIZE);
   if (!*encryptedMessage) return FAILURE;
 
-  if (EVP_EncryptInit_ex(c->aesEncryptContext, EVP_aes_256_cbc(), NULL, c->aesKey, c->aesIv) != 1) return FAILURE;
+  if (EVP_EncryptInit_ex(c->aesEncryptContext, EVP_aes_256_cbc(),
+                         NULL, c->aesKey, c->aesIv) != 1) return FAILURE;
 
-  if (EVP_EncryptUpdate(c->aesEncryptContext, *encryptedMessage, &block_len, message, (int)messageLength) != 1) return FAILURE;
+  if (EVP_EncryptUpdate(c->aesEncryptContext, *encryptedMessage,
+                        &block_len, message, (int)messageLength) != 1) return FAILURE;
   out_len = block_len;
 
-  if (EVP_EncryptFinal_ex(c->aesEncryptContext, *encryptedMessage + out_len, &block_len) != 1) return FAILURE;
+  if (EVP_EncryptFinal_ex(c->aesEncryptContext,
+                          *encryptedMessage + out_len, &block_len) != 1) return FAILURE;
   out_len += block_len;
 
   *encryptedMessageLength = (size_t)out_len;
@@ -195,15 +218,21 @@ int crypto_aes_decrypt(
   int block_len = 0;
   int out_len = 0;
 
+  /* Guard against silent truncation when casting to int for OpenSSL APIs. */
+  if (encryptedMessageLength > (size_t)INT_MAX) return FAILURE;
+
   *decryptedMessage = (unsigned char *)malloc(encryptedMessageLength + 1);
   if (!*decryptedMessage) return FAILURE;
 
-  if (EVP_DecryptInit_ex(c->aesDecryptContext, EVP_aes_256_cbc(), NULL, c->aesKey, c->aesIv) != 1) return FAILURE;
+  if (EVP_DecryptInit_ex(c->aesDecryptContext, EVP_aes_256_cbc(),
+                         NULL, c->aesKey, c->aesIv) != 1) return FAILURE;
 
-  if (EVP_DecryptUpdate(c->aesDecryptContext, *decryptedMessage, &block_len, encryptedMessage, (int)encryptedMessageLength) != 1) return FAILURE;
+  if (EVP_DecryptUpdate(c->aesDecryptContext, *decryptedMessage,
+                        &block_len, encryptedMessage, (int)encryptedMessageLength) != 1) return FAILURE;
   out_len = block_len;
 
-  if (EVP_DecryptFinal_ex(c->aesDecryptContext, *decryptedMessage + out_len, &block_len) != 1) return FAILURE;
+  if (EVP_DecryptFinal_ex(c->aesDecryptContext,
+                          *decryptedMessage + out_len, &block_len) != 1) return FAILURE;
   out_len += block_len;
 
   (*decryptedMessage)[out_len] = '\0';

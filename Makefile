@@ -16,9 +16,10 @@
 
 name = crypto
 specfile = packaging/rpm/$(name).spec
-dscfile = packaging/debian/$(name).dsc
+changelog = packaging/debian/changelog
 
-version := $(shell awk 'BEGIN { FS=":" } /^Version:/ { print $$2}' $(specfile) | sed -e 's/ //g' -e 's/\$$//')
+# Version is the single source of truth in crypto.h
+version := $(shell grep -m1 'define CRYPTO_VERSION' crypto.h | sed 's/.*"\(.*\)".*/\1/')
 
 distversion = $(version)
 rpmrelease =
@@ -41,7 +42,7 @@ OBJS := $(SRCS:.c=.o)
 MAN_MD := crypto.1.md
 MAN_ROFF := crypto.1
 
-.PHONY: all man install clean static
+.PHONY: all man install clean static test version release
 
 all: $(BIN) man
 
@@ -95,10 +96,44 @@ deb: dist
 static: $(OBJS)
 	$(CC) $(LDFLAGS) -static -Wl,-s -o $(BIN) $(OBJS) $(LDLIBS)
 
+version:
+	@echo "$(version)"
+
+# release: propagate CRYPTO_VERSION from crypto.h into the RPM spec and
+# Debian changelog so they stay in sync.  Run this after bumping the version
+# in crypto.h before cutting a release.
+release:
+	@echo "\033[1m== Syncing version $(version) into packaging files ==\033[0;0m"
+	sed -i 's/^Version:.*/Version:        $(version)/' $(specfile)
+	sed -i 's/^Release:.*/Release:        1%{?dist}/' $(specfile)
+	@# Prepend a new Debian changelog entry (dch is preferred, but sed keeps
+	@# the dependency footprint small)
+	@CURDATE=$$(date -R) && \
+	{ echo "crypto ($(version)-1) unstable; urgency=medium"; \
+	  echo ""; \
+	  echo "  * Release $(version)."; \
+	  echo ""; \
+	  echo " -- Gratien Dhaese <gratien.dhaese@gmail.com>  $$CURDATE"; \
+	  echo ""; \
+	  cat $(changelog); \
+	} > $(changelog).tmp && mv $(changelog).tmp $(changelog)
+	@echo "Done. Review packaging/rpm/crypto.spec and packaging/debian/changelog."
+
 clean:
 	rm -f $(BIN) $(OBJS) $(MAN_ROFF)
 
 test: $(BIN)
 	@echo "\033[1m== Testing crypto ==\033[0;0m"
-	printf "test" | ./$(BIN) aes-enc | ./$(BIN) aes-dec
+	@TMPDIR=$$(mktemp -d) && trap 'rm -rf "$$TMPDIR"' EXIT && \
+	  AES_KEY="$$TMPDIR/test.key" && \
+	  RSA_PRIV="$$TMPDIR/private.pem" && \
+	  RSA_PUB="$$TMPDIR/public.pem" && \
+	  PLAIN="crypto test string" && \
+	  ./$(BIN) aes-keygen "$$AES_KEY" 2>/dev/null && \
+	  RESULT=$$(printf '%s' "$$PLAIN" | ./$(BIN) aes-enc "$$AES_KEY" | ./$(BIN) aes-dec "$$AES_KEY") && \
+	  [ "$$RESULT" = "$$PLAIN" ] && echo "  PASS  AES round-trip" || { echo "  FAIL  AES round-trip"; exit 1; } && \
+	  openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$$RSA_PRIV" 2>/dev/null && \
+	  openssl pkey -in "$$RSA_PRIV" -pubout -out "$$RSA_PUB" 2>/dev/null && \
+	  RESULT=$$(printf '%s' "$$PLAIN" | ./$(BIN) rsa-enc "$$RSA_PUB" | ./$(BIN) rsa-dec "$$RSA_PRIV") && \
+	  [ "$$RESULT" = "$$PLAIN" ] && echo "  PASS  RSA round-trip" || { echo "  FAIL  RSA round-trip"; exit 1; }
 	@echo

@@ -1,0 +1,113 @@
+.\" generated with Ronn-NG/v0.9.1
+.\" http://github.com/apjanke/ronn-ng/tree/0.9.1
+.TH "CRYPTO" "1" "June 2026" ""
+.SH "NAME"
+\fBcrypto\fR \- Tool to encrypt or decrypt standard input using OpenSSL (RSA seal/open or AES\-256\-CBC)
+.SH "SYNOPSIS"
+.nf
+crypto rsa\-enc <pubkey\.pem>   < plaintext > container\.txt
+crypto rsa\-dec <privkey\.pem>  < container\.txt > plaintext
+
+crypto aes\-keygen <keyfile>
+crypto aes\-enc <keyfile>      < plaintext > container\.txt
+crypto aes\-dec <keyfile>      < container\.txt > plaintext
+.fi
+.SH "DESCRIPTION"
+\fBcrypto\fR is a small CLI tool that reads all data from standard input and writes the result to standard output\.
+.P
+It supports:
+.IP "\[ci]" 4
+\fBRSA hybrid encryption\fR via OpenSSL \fBEVP_Seal*\fR / \fBEVP_Open*\fR (\fBrsa\-enc\fR / \fBrsa\-dec\fR)
+.IP "\[ci]" 4
+\fBAES\-256\-CBC\fR symmetric encryption via OpenSSL \fBEVP_Encrypt*\fR / \fBEVP_Decrypt*\fR (\fBaes\-enc\fR / \fBaes\-dec\fR)
+.IP "" 0
+.P
+Every mode requires a key file argument\. Keys are never embedded in the output container\. The tool is designed for piping and scripting \(em it prints no interactive prompts and no labels on output\.
+.SH "MODES"
+.SS "rsa\-enc <pubkey\.pem>"
+Reads plaintext bytes from \fBstdin\fR, encrypts using RSA hybrid "seal" (RSA\-encrypted session key + AES\-256\-CBC data encryption), and writes a single\-line container to \fBstdout\fR\.
+.P
+The recipient's \fBpublic key\fR PEM file is required\. The corresponding private key never leaves the recipient's side and is never transmitted\.
+.SS "rsa\-dec <privkey\.pem>"
+Reads a single\-line RSA container from \fBstdin\fR, decrypts it using the given \fBprivate key\fR PEM file, and writes plaintext bytes to \fBstdout\fR\.
+.SS "aes\-keygen <var>keyfile</var>"
+Generates 48 cryptographically random bytes (32\-byte AES\-256 key + 16\-byte IV) and writes them to \fBkeyfile\fR\. Use this to create a key file before running \fBaes\-enc\fR or \fBaes\-dec\fR\. Prints a confirmation message to \fBstderr\fR\.
+.SS "aes\-enc <var>keyfile</var>"
+Reads plaintext bytes from \fBstdin\fR, encrypts using AES\-256\-CBC with the key and IV loaded from \fBkeyfile\fR, and writes a single\-line container to \fBstdout\fR\.
+.P
+The key is \fBnot\fR included in the container output\. Both the sender and receiver must possess the same key file\.
+.SS "aes\-dec <var>keyfile</var>"
+Reads a single\-line AES container from \fBstdin\fR, loads the key from \fBkeyfile\fR, and writes plaintext bytes to \fBstdout\fR\.
+.SH "KEY FILE FORMAT"
+.SS "RSA keys"
+Standard PEM format, compatible with OpenSSL:
+.IP "" 4
+.nf
+# Generate a 2048\-bit RSA key pair
+openssl genpkey \-algorithm RSA \-pkeyopt rsa_keygen_bits:2048 \-out private\.pem
+openssl pkey \-in private\.pem \-pubout \-out public\.pem
+.fi
+.IP "" 0
+.SS "AES key file"
+A binary file of exactly \fB48 bytes\fR: the first 32 bytes are the AES\-256 key, the next 16 bytes are the AES\-CBC IV\. Use \fBaes\-keygen\fR to create one\.
+.SH "CONTAINER FORMAT"
+All \fB*\-enc\fR modes output a \fBsingle line\fR to \fBstdout\fR:
+.P
+\fBRSA container\fR (\fBrsa\-enc\fR):
+.IP "" 4
+.nf
+b64(ciphertext)\.b64(encryptedSessionKey)\.b64(IV)
+.fi
+.IP "" 0
+.P
+\fBAES container\fR (\fBaes\-enc\fR):
+.IP "" 4
+.nf
+b64(ciphertext)\.b64(IV)
+.fi
+.IP "" 0
+.P
+Each \fBb64(\|\.\|\.\|\.)\fR is Base64\-encoded without newlines\. The AES key is \fBnot\fR present in the container\.
+.SH "EXAMPLES"
+.SS "Generate an RSA key pair and perform a round\-trip"
+.nf
+openssl genpkey \-algorithm RSA \-pkeyopt rsa_keygen_bits:2048 \-out private\.pem
+openssl pkey \-in private\.pem \-pubout \-out public\.pem
+
+printf "hello\en" | \./crypto rsa\-enc public\.pem | \./crypto rsa\-dec private\.pem
+.fi
+.SS "Generate an AES key file and perform a round\-trip"
+.nf
+\&\./crypto aes\-keygen my\.key
+printf "test" | \./crypto aes\-enc my\.key | \./crypto aes\-dec my\.key
+.fi
+.SS "Encrypt a file and decrypt it"
+.nf
+\&\./crypto aes\-keygen my\.key
+\&\./crypto aes\-enc my\.key < input\.bin > out\.container
+\&\./crypto aes\-dec my\.key < out\.container > input\.bin\.recovered
+.fi
+.SH "EXIT STATUS"
+.IP "\[ci]" 4
+\fB0\fR on success
+.IP "\[ci]" 4
+\fB1\fR on errors (missing/invalid key file, invalid container, crypto failure, I/O failure)
+.IP "\[ci]" 4
+\fB2\fR on usage error (wrong number of arguments or unknown mode)
+.IP "" 0
+.SH "SECURITY NOTES"
+.IP "\[ci]" 4
+RSA containers do \fBnot\fR embed any key material\. Confidentiality relies entirely on keeping the private key file secret\.
+.IP "\[ci]" 4
+AES containers do \fBnot\fR embed the key\. The key file must be kept secret and shared securely out\-of\-band with the decrypting party\.
+.IP "\[ci]" 4
+Input is limited to 256 MiB to prevent unbounded memory growth\.
+.IP "\[ci]" 4
+Key material is wiped from memory using \fBOPENSSL_cleanse\fR before being freed\.
+.IP "" 0
+.SH "SEE ALSO"
+\fBopenssl(1)\fR, \fBopenssl\-genpkey(1)\fR, \fBopenssl\-pkey(1)\fR, OpenSSL EVP documentation
+.SH "AUTHOR"
+Original from the \fBshanet/Crypto\-Example\fR repository\.
+.P
+Updated by Gratien Dhaese

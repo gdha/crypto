@@ -1,0 +1,20 @@
+To build an RPM you need to provide a tarball matching Source0, e.g.:
+
+  git clone https://github.com/shanet/Crypto-Example
+  cd Crypto-Example
+  VERSION=0.1.0
+  cd ..
+  tar -czf crypto-example-${VERSION}.tar.gz Crypto-Example
+
+Then place the tarball in your rpmbuild SOURCES directory and the spec in SPECS:
+
+  rpmbuild -ba crypto-example.spec
+
+Notes:
+- The %autosetup line assumes the tarball extracts into Crypto-Example-%{version}.
+  If your tarball extracts into just "Crypto-Example", change it to:
+    %autosetup -n Crypto-Example
+- Ensure the project Makefile supports:
+    make install DESTDIR=... PREFIX=...
+  and generates crypto_example.1 from crypto_example.1.md using ronn.
+- Some distros package ronn as `ronn` or `rubygem-ronn`; adjust BuildRequires accordingly.

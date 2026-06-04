@@ -3,10 +3,12 @@
 #include <stdlib.h>
 
 char* base64Encode(const unsigned char *message, const size_t length) {
-  int encodedSize = 4 * (int)ceil((double)length / 3.0);
-  char *encodedMessage = (char*)malloc((size_t)encodedSize + 1);
+  /* Encoded size is ceil(length / 3) * 4, computed with integer arithmetic
+     to avoid floating-point rounding issues. */
+  size_t encodedSize = ((length + 2) / 3) * 4;
+  char *encodedMessage = (char*)malloc(encodedSize + 1);
 
-  if(encodedMessage == NULL) {
+  if (encodedMessage == NULL) {
     fprintf(stderr, "Failed to allocate memory\n");
     exit(1);
   }
@@ -30,11 +32,12 @@ char* base64Encode(const unsigned char *message, const size_t length) {
   return encodedMessage;
 }
 
-int base64Decode(const char *encodedMessage, const size_t encodedMessageLength, unsigned char **decodedMessage) {
+int base64Decode(const char *encodedMessage, const size_t encodedMessageLength,
+                 unsigned char **decodedMessage) {
   int decodedLength = calculateDecodedLength(encodedMessage, encodedMessageLength);
   *decodedMessage = (unsigned char*)malloc((size_t)decodedLength + 1);
 
-  if(*decodedMessage == NULL) {
+  if (*decodedMessage == NULL) {
     fprintf(stderr, "Failed to allocate memory\n");
     exit(1);
   }
@@ -54,13 +57,15 @@ int base64Decode(const char *encodedMessage, const size_t encodedMessageLength, 
 int calculateDecodedLength(const char *encodedMessage, const size_t encodedMessageLength) {
   unsigned int padding = 0;
 
-  if(encodedMessageLength >= 2 &&
-     encodedMessage[encodedMessageLength - 1] == '=' &&
-     encodedMessage[encodedMessageLength - 2] == '=') {
+  if (encodedMessageLength >= 2 &&
+      encodedMessage[encodedMessageLength - 1] == '=' &&
+      encodedMessage[encodedMessageLength - 2] == '=') {
     padding = 2;
-  } else if (encodedMessageLength >= 1 && encodedMessage[encodedMessageLength - 1] == '=') {
+  } else if (encodedMessageLength >= 1 &&
+             encodedMessage[encodedMessageLength - 1] == '=') {
     padding = 1;
   }
 
-  return (int)((double)encodedMessageLength * 0.75) - (int)padding;
+  /* Use integer arithmetic: floor(len * 3 / 4) - padding */
+  return (int)(encodedMessageLength * 3 / 4) - (int)padding;
 }

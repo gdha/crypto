@@ -5,7 +5,6 @@
 #include <openssl/buffer.h>
 #include <openssl/evp.h>
 
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
