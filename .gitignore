@@ -56,3 +56,5 @@ dkms.conf
 
 # Build output
 crypto
+dist/
+crypto.1
